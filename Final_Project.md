@@ -39,3 +39,27 @@ The final project will employ a dataset acquired from
 contains all the survey data gathered. We will use this dataset **to
 identify the factors that may influence individuals’ likelihood of
 receiving the H1N1 or seasonal flu vaccinations**.
+
+### Rationale for research question
+
+It is essential for public health to recognize the elements that affect
+people’s probability to receive the H1N1 or seasonal flu shots for a
+variety of reasons:
+
+1.  **Improve disease prevention**
+    - Understand what factors influence vaccine uptake can help public
+      health officials target their efforts to increase vaccination
+      rates and prevent outbreaks.
+2.  **Promote health equity**
+    - Identifying factors that influence vaccine uptake can help address
+      health disparities and ensure that everyone has access to
+      vaccines.
+    - If certain groups are less likely to get vaccinated due to access
+      barriers or mistrust of vaccines, public health officials can work
+      to address these issues and increase vaccination rates in those
+      populations.
+3.  **Reduce economic impact**
+    - The flu can have a significant economic impact due to lost of
+      productivity, healthcare costs, and other related expenses.
+      Increasing vaccination rates and preventing outbreaks can help
+      reduce these economic costs and benefit society as a whole.

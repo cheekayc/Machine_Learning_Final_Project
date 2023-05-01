@@ -4,13 +4,17 @@ author: "Chee Kay Cheong"
 output: github_document
 ---
 
+## Load needed packages
 ```{r setup, message = FALSE, warning = FALSE}
 knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 
 library(tidyverse)
+library(finalfit)
+library(mice)
 library(caret)
 library(glmnet)
 library(randomForest)
+library(pROC)
 ```
 
 # Introduction
@@ -47,10 +51,139 @@ It is essential for public health to recognize the elements that affect people's
 
 # Data Preparation
 
-```{r}
+##### Read in and clean dataset.
 
+* Convert all character variables to factor variables.
+* Convert the binary outcomes `h1n1_vaccine` and `seasonal_vaccine` from numeric to factor variables.
+
+```{r}
+flu_df = read_csv("./H1N1_Flu_Vaccines.csv") %>% 
+  janitor::clean_names() %>% 
+  select(-respondent_id) %>% 
+  mutate(
+    age_group = as_factor(age_group),
+    education = as_factor(education),
+    race = as_factor(race),
+    sex = as_factor(sex),
+    income_poverty = as_factor(income_poverty),
+    marital_status = as_factor(marital_status),
+    rent_or_own = as_factor(rent_or_own),
+    employment_status = as_factor(employment_status),
+    hhs_geo_region = as_factor(hhs_geo_region),
+    census_msa = as_factor(census_msa),
+    employment_industry = as_factor(employment_industry),
+    employment_occupation = as_factor(employment_occupation),
+    h1n1_vaccine = as_factor(h1n1_vaccine),
+    seasonal_vaccine = as_factor(seasonal_vaccine))
 ```
 
+##### Examine missing data.
+```{r}
+missing_plot(flu_df)
+```
+
+Based on the plot above, `health_insurance`, `employment_industry`, and `employment_occupation` have the most number of missing values. We could simply remove these three variables, but this may violate the purpose of our research question. Simply removing these variables with missing values may introduce bias to our results.
+
+# Impute missing data
+
+Impute missing data using *random forest imputation*.
+```{r, results = 'hide'}
+impute_missing_data = mice(flu_df, meth = "rf", ntree = 5, m = 2, seed = 100)
+flu_nomiss = complete(impute_missing_data)
+```
+
+Examine the "new" dataset.
+```{r}
+missing_plot(flu_nomiss)
+```
+
+Based on the plot above, there is no more missing values in the new dataset `flu_nomiss`.
+Next, we will perform *Elastic Net* to reduce the dimension of the dataset by removing features that are not as important and significant for seasonal and H1N1 vaccines.
+
+# Data Partitioning
+
+We will partition the data into a 70/30 split separately for the two different dependent variables: `h1n1_vaccine` and `seasonal_vaccine`.
+
+##### H1N1 Vaccines
+
+To understand what variables are responsible for influencing people's probability of receiving the H1N1 vaccines, we will remove the variable `seasonal_vaccine` from this dataset 
+before partitioning.
+```{r}
+set.seed(123)
+
+h1n1 = flu_nomiss %>% 
+  select(-seasonal_vaccine)
+
+h1n1.train.index = createDataPartition(y = h1n1$h1n1_vaccine, p = 0.7, list = FALSE)
+h1n1.train.data = h1n1[h1n1.train.index, ]
+h1n1.test.data = h1n1[-h1n1.train.index, ]
+```
+
+##### Seasonal Flu vaccines
+
+To understand what variables are responsible for influencing people's probability of receiving the seasonal flu vaccines, we will remove the variable `h1n1_vaccine` from this
+dataset before partitioning.
+```{r}
+set.seed(123)
+
+seasonal = flu_nomiss %>% 
+  select(-h1n1_vaccine)
+
+seasonal.train.index = createDataPartition(y = seasonal$seasonal_vaccine, p = 0.7, list = FALSE)
+seasonal.train.data = seasonal[seasonal.train.index, ]
+seasonal.test.data = seasonal[-seasonal.train.index, ]
+```
+
+
+# Feature Selection using Elastic Net
+
+The dataset includes 35 independent variables. To address our research question, it is necessary to conduct dimension reduction and select the most relevant features that have the
+greatest impact on our outcome variable.
+
+#### H1N1 vaccines
+
+Fit model into H1N1 training set.
+```{r}
+set.seed(123)
+
+# Create vectors of lambda and alpha
+lambda = 10^seq(-3, 3, length = 100)
+alpha = 0.1*seq(1, 10, length = 10)
+tune_grid = expand.grid(alpha = alpha, lambda = lambda)
+
+# Set validation method and options
+control.settings = trainControl(method = "cv", number = 10)
+
+# Fit model 
+h1n1_model = train(h1n1_vaccine ~ ., data = h1n1.train.data, method = "glmnet", trControl = control.settings, preProcess = c("center", "scale"), tuneGrid = tune_grid)
+
+# Output best values of alpha & lambda
+h1n1_model$bestTune
+```
+
+Examine model coefficients.
+```{r}
+coef(h1n1_model$finalModel, h1n1_model$bestTune$lambda)
+```
+
+We will remove variables that have an average coefficient values that are smaller than |0.05| as they are not as important for predicting the probability of receiving H1N1 vaccines. 
+
+Based on the model coefficients, we would remove `behavioral_avoidance`, `behavioral_face_mask`, `behavioral_wash_hands`, `behavioral_outside_home`, `behavioral_touch_face`,
+`chronic_med_condition`, `opinion_h1n1_sick_from_vacc`, `income_poverty`, `rent_or_own`, `employment_status`, `hhs_geo_region`, `census_msa`, `household_adults`,
+`household_children`, `employment_industry`, and `employment_occupation`.
+
+
+
+
+
+
+
+Apply final model in the test set.
+```{r}
+h1n1_test_outcome = predict(h1n1_model, h1n1.test.data)
+
+confusionMatrix(h1n1_test_outcome, h1n1.test.data$h1n1_vaccine, positive = "1")
+```
 
 
 

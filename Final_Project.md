@@ -114,7 +114,7 @@ values may introduce bias to our results.
 
 # Impute missing data
 
-Impute missing data using *random forest imputation*.
+Impute missing data using ***random forest imputation***.
 
 ``` r
 impute_missing_data = mice(flu_df, meth = "rf", ntree = 5, m = 2, seed = 100)
@@ -343,6 +343,32 @@ with H1N1 flu without vaccine.
 3. `opinion_h1n1_vacc_effective` - Respondent’s opinion about H1N1
 vaccine effectiveness.
 
+##### Examine full model accuracy
+
+``` r
+confusionMatrix(h1n1_model)
+```
+
+    ## Cross-Validated (10 fold) Confusion Matrix 
+    ## 
+    ## (entries are percentual average cell counts across resamples)
+    ##  
+    ##           Reference
+    ## Prediction    0    1
+    ##          0 68.5 10.2
+    ##          1 10.2 11.1
+    ##                             
+    ##  Accuracy (average) : 0.7959
+
+The model’s average accuracy on the full dataset that includes all
+variables is 79.59%. Specifically, 11% of the data was correctly
+classified as having received H1N1 vaccines, while 10.2% of the data
+classified as not having received the vaccine actually had received it.
+Additionally, 10.2% of the data that were classified as having received
+the vaccine had never actually received it. On the other hand, 68.5% of
+the data were correctly classified as not having received the H1N1
+vaccine.
+
 ### Select only relevant variables for H1N1 training and testing dataset
 
 ``` r
@@ -387,22 +413,7 @@ rf_h1n1$bestTune
     ##   mtry
     ## 1    1
 
-Examine model accuracy and variable importance.
-
-``` r
-confusionMatrix(rf_h1n1)
-```
-
-    ## Cross-Validated (10 fold) Confusion Matrix 
-    ## 
-    ## (entries are percentual average cell counts across resamples)
-    ##  
-    ##           Reference
-    ## Prediction    0    1
-    ##          0 59.1  5.7
-    ##          1 19.7 15.6
-    ##                             
-    ##  Accuracy (average) : 0.7468
+Examine variable importance.
 
 ``` r
 varImp(rf_h1n1)
@@ -415,18 +426,18 @@ varImp(rf_h1n1)
     ## opinion_h1n1_risk             5.694
     ## opinion_h1n1_vacc_effective   0.000
 
-The ***random forests*** model gives an average accuracy of 74.68%. The
-rank of variable importance for the reduced model is the same as the
-full model. The importance of the variable `opinion_h1n1_risk` has
-increased, while the importance of the variable
-`opinion_h1n1_vacc_effective` has reduced to zero, which indicates the
-respondent’s opinion about H1N1 vaccine effectiveness is may not be
-important to predict a person’s likelihood of receiving the H1N1
-vaccine.
+The variable importance ranking in the reduced model remains the same as
+the full model. However, the importance of the `opinion_h1n1_risk`
+variable has increased, while the importance of
+`opinion_h1n1_vacc_effective` has reduced to zero. This suggests that a
+respondent’s opinion on the effectiveness of the H1N1 vaccine may not be
+a crucial factor in predicting their likelihood of receiving it.
 
 ## Evaluate the performance of model on the testing set
 
 ``` r
+set.seed(123)
+
 pred.rf.test = predict(rf_h1n1, h1n1_select_test)
 
 test.outcome = h1n1_select_test$h1n1_vaccine
@@ -438,32 +449,39 @@ confusionMatrix(pred.rf.test, test.outcome, positive = '1')
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 4804  451
-    ##          1 1505 1251
+    ##          0 4808  452
+    ##          1 1501 1250
     ##                                           
-    ##                Accuracy : 0.7558          
-    ##                  95% CI : (0.7463, 0.7652)
+    ##                Accuracy : 0.7562          
+    ##                  95% CI : (0.7467, 0.7656)
     ##     No Information Rate : 0.7875          
     ##     P-Value [Acc > NIR] : 1               
     ##                                           
-    ##                   Kappa : 0.4049          
+    ##                   Kappa : 0.4053          
     ##                                           
     ##  Mcnemar's Test P-Value : <2e-16          
     ##                                           
-    ##             Sensitivity : 0.7350          
-    ##             Specificity : 0.7615          
-    ##          Pos Pred Value : 0.4539          
-    ##          Neg Pred Value : 0.9142          
+    ##             Sensitivity : 0.7344          
+    ##             Specificity : 0.7621          
+    ##          Pos Pred Value : 0.4544          
+    ##          Neg Pred Value : 0.9141          
     ##              Prevalence : 0.2125          
-    ##          Detection Rate : 0.1562          
-    ##    Detection Prevalence : 0.3440          
-    ##       Balanced Accuracy : 0.7482          
+    ##          Detection Rate : 0.1560          
+    ##    Detection Prevalence : 0.3434          
+    ##       Balanced Accuracy : 0.7483          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-After applying the model to the reduced test set, the accuracy increased
-to 75.62%. The model also showed a balanced sensitivity (0.73) and
+In the reduced dataset, the ***random forests*** model achieves an
+accuracy of 75.62%, which is roughly 4% lower than the *Elastic Net*
+model’s accuracy on the full dataset. This decrease in accuracy is
+expected as we reduced the number of predictors. Despite removing almost
+90% of the features, the model’s accuracy did not decrease
+significantly. This suggests that the selected features are crucial
+predictors for the model.
+
+Besides, the model also showed a quite balanced sensitivity (0.73) and
 specificity (0.76).
 
 # Seasonal Flu vaccines
@@ -670,11 +688,38 @@ with seasonal flu without vaccine.
 2. `opinion_seas_vacc_effective` - Respondent’s opinion about seasonal
 flu vaccine effectiveness.  
 3. `doctor_recc_seasonal` - Whether seasonal flu vaccine was recommended
-by doctor. 4. `age_group` - Age group of respondent.  
+by doctor.  
+4. `age_group` - Age group of respondent.  
 5. `opinion_seas_sick_from_vacc` - Respondent’s worry of getting sick
 from taking seasonal flu vaccine.  
-6. `health_worker` - Whether respondent is a healthcare worker. 7.
-`health_insurance` - Whether respondent has health insurance.
+6. `health_worker` - Whether respondent is a healthcare worker.  
+7. `health_insurance` - Whether respondent has health insurance.
+
+##### Examine full model accuracy
+
+``` r
+confusionMatrix(seasonal_model)
+```
+
+    ## Cross-Validated (10 fold) Confusion Matrix 
+    ## 
+    ## (entries are percentual average cell counts across resamples)
+    ##  
+    ##           Reference
+    ## Prediction    0    1
+    ##          0 43.5 11.8
+    ##          1  9.9 34.8
+    ##                             
+    ##  Accuracy (average) : 0.7832
+
+The model’s average accuracy on the full dataset that includes all
+variables is 78.32%. Specifically, 35% of the data was correctly
+classified as having received seasonal flu vaccines, while 12% of the
+data classified as not having received the vaccine actually had received
+it. Additionally, 10% of the data that were classified as having
+received the vaccine had never actually received it. On the other hand,
+43.5% of the data were correctly classified as not having received the
+H1N1 vaccine.
 
 ### Select only relevant variables for seasonal flu training and testing dataset
 
@@ -721,22 +766,7 @@ rf_seasonal$bestTune
     ##   mtry
     ## 1    3
 
-Examine model accuracy and variable importance.
-
-``` r
-confusionMatrix(rf_seasonal)
-```
-
-    ## Cross-Validated (10 fold) Confusion Matrix 
-    ## 
-    ## (entries are percentual average cell counts across resamples)
-    ##  
-    ##           Reference
-    ## Prediction    0    1
-    ##          0 43.1 12.2
-    ##          1 10.4 34.3
-    ##                             
-    ##  Accuracy (average) : 0.7739
+Examine variable importance.
 
 ``` r
 varImp(rf_seasonal)
@@ -756,20 +786,20 @@ varImp(rf_seasonal)
     ## age_group35 - 44 Years        1.678
     ## age_group45 - 54 Years        0.000
 
-The ***random forests*** model gives an average accuracy of 77.39%. The
-rank of variable importance for the reduced model is quite similar the
-full model. The importance of the variable `opinion_seas_vacc_effective`
-has increased, while the importance of the variables
-`doctor_recc_seasonal` has decreased a little bit. People in the age
-group of 65+ years are more likely to receive a seasonal flu vaccines
-compared to other age groups. The importance of all other variables that
-were selected has dropped to below 20%, which indicates maybe they are
-not important variables that influence people’s probability of receiving
-seasonal flu vaccines.
+The variable importance ranking for the reduced model is very similar to
+that of the full model. The `opinion_seas_vacc_effective` variable’s
+importance has increased, while the `doctor_recc_seasonal` variable’s
+importance has decreased slightly. Individuals aged 65 years or older
+are more likely to receive seasonal flu vaccines than those in other age
+groups. Furthermore, the importance of all other selected variables has
+dropped below 20%, suggesting that they may not significantly influence
+a person’s likelihood of receiving seasonal flu vaccines.
 
 ## Evaluate the performance of model on the testing set
 
 ``` r
+set.seed(123)
+
 pred.rf.seasonal = predict(rf_seasonal, seasonal_select_test)
 
 test.outcome.seasonal = seasonal_select_test$seasonal_vaccine
@@ -781,34 +811,106 @@ confusionMatrix(pred.rf.seasonal, test.outcome.seasonal, positive = '1')
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 3416  960
-    ##          1  865 2770
+    ##          0 3415  960
+    ##          1  866 2770
     ##                                           
-    ##                Accuracy : 0.7722          
-    ##                  95% CI : (0.7628, 0.7813)
+    ##                Accuracy : 0.7721          
+    ##                  95% CI : (0.7627, 0.7812)
     ##     No Information Rate : 0.5344          
     ##     P-Value [Acc > NIR] : < 2e-16         
     ##                                           
-    ##                   Kappa : 0.5415          
+    ##                   Kappa : 0.5412          
     ##                                           
-    ##  Mcnemar's Test P-Value : 0.02778         
+    ##  Mcnemar's Test P-Value : 0.02953         
     ##                                           
     ##             Sensitivity : 0.7426          
-    ##             Specificity : 0.7979          
-    ##          Pos Pred Value : 0.7620          
+    ##             Specificity : 0.7977          
+    ##          Pos Pred Value : 0.7618          
     ##          Neg Pred Value : 0.7806          
     ##              Prevalence : 0.4656          
     ##          Detection Rate : 0.3458          
-    ##    Detection Prevalence : 0.4538          
-    ##       Balanced Accuracy : 0.7703          
+    ##    Detection Prevalence : 0.4539          
+    ##       Balanced Accuracy : 0.7702          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-After applying the model to the reduced test set, the accuracy of the
-model remained about the same (77.24%). The model also showed a balanced
-sensitivity (0.74) and specificity (0.80).
+In the reduced dataset, the ***random forests*** model achieves an
+accuracy of 77.21%, which is only 1% lower than the *Elastic Net*
+model’s accuracy on the full dataset. This decrease in accuracy is
+expected as we reduced the number of predictors. Despite removing 77% of
+the features, the model’s accuracy did not decrease significantly. This
+suggests that the selected features are crucial predictors for the
+model.
 
-## Analytic Limitation
+Besides, the model also showed a quite balanced sensitivity (0.74) and
+specificity (0.80).
+
+# Conclusion
+
+### HIV vaccines
+
+Through a data-driven approach, we have successfully identified that a
+doctor’s recommendation and an individual’s perception of contracting
+H1N1 flu without a vaccine can significantly increase the likelihood of
+receiving the H1N1 vaccine.
+
+### Seasonal Flu vaccines
+
+Using a data-driven approach, we have successfully identified that a
+doctor’s recommendation, an individual’s perception of contracting
+seasonal flu without a vaccine, and their belief in the vaccine’s high
+efficacy are key factors that can significantly increase the likelihood
+of receiving the seasonal flu vaccine. Additionally, the data indicates
+that individuals in the older age group are more likely to receive
+seasonal flu vaccines.
+
+## Analytic Limitations
+
+1)  Missing data
+    - In the present study, it has been observed that three features of
+      the dataset under consideration exhibit a high degree of
+      missingness. While it may be tempting to remove these features
+      from the analysis altogether, it must be noted that such an action
+      may result in introducing bias to the study. The nature of the
+      missing data remains unknown, and it is possible that the
+      missingness is either missing at random (MAR) or not missing at
+      random (NMAR). If indeed the data is MAR or NMAR, removing
+      variables with missing values could potentially bias the results
+      of the analysis.
+2)  Imputation can introduce bias
+    - Imputation, as a technique for handling missing data, carries with
+      it the potential to introduce bias into the results of an analysis
+      if the imputed values do not accurately reflect the true values of
+      the missing data. This risk is particularly salient when the
+      missingness is non-random or associated with unobserved variables.
+      In such cases, imputation may not be able to fully account for the
+      underlying mechanisms driving the missingness, leading to biased
+      results.
 
 ## Ethical Consideration
+
+The potential impact of an incorrect output produced by a machine
+learning model is a significant concern in many research contexts. In
+the present study, it was noted that the dataset under consideration
+includes three features with a large number of missing values, and it is
+unclear whether the missingness is completely at random. The use of
+imputation methods to handle these missing values raises the possibility
+that bias may have been introduced into the analysis, which could lead
+to inaccurate results.
+
+To address this concern, further investigation is required to verify the
+accuracy of the results obtained using machine learning approaches.
+Specifically, it may be necessary to incorporate epidemiological
+knowledge and expertise to supplement the findings obtained from machine
+learning analyses. By doing so, it may be possible to obtain a more
+accurate and comprehensive understanding of the relationships between
+variables and outcomes under consideration.
+
+Overall, it is important to recognize the limitations and potential
+biases of machine learning methods, particularly when dealing with
+datasets that include missing values or other sources of potential bias.
+By taking a cautious and critical approach to the use of machine
+learning in research, it is possible to obtain more accurate and
+reliable results that can inform effective decision-making and policy
+development.

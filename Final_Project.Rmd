@@ -86,7 +86,7 @@ Based on the plot above, `health_insurance`, `employment_industry`, and `employm
 
 # Impute missing data
 
-Impute missing data using *random forest imputation*.
+Impute missing data using ***random forest imputation***.
 ```{r, results = 'hide'}
 impute_missing_data = mice(flu_df, meth = "rf", ntree = 5, m = 2, seed = 100)
 flu_nomiss = complete(impute_missing_data)
@@ -167,6 +167,15 @@ Based on the model coefficients and variable importance, we identified three var
 3. `opinion_h1n1_vacc_effective` - Respondent's opinion about H1N1 vaccine effectiveness.
 
 
+##### Examine full model accuracy
+
+```{r}
+confusionMatrix(h1n1_model)
+```
+
+The model's average accuracy on the full dataset that includes all variables is 79.59%. Specifically, 11% of the data was correctly classified as having received H1N1 vaccines, while 10.2% of the data classified as not having received the vaccine actually had received it. Additionally, 10.2% of the data that were classified as having received the vaccine had never actually received it. On the other hand, 68.5% of the data were correctly classified as not having received the H1N1 vaccine.
+
+
 ### Select only relevant variables for H1N1 training and testing dataset
 
 ```{r}
@@ -199,18 +208,21 @@ rf_h1n1 = train(h1n1_vaccine ~ ., data = h1n1_select_train, method = "rf", metri
 rf_h1n1$bestTune
 ```
 
-Examine model accuracy and variable importance.
+Examine variable importance.
 ```{r}
-confusionMatrix(rf_h1n1)
-
 varImp(rf_h1n1)
 ```
 
-The ***random forests*** model gives an average accuracy of 74.68%. The rank of variable importance for the reduced model is the same as the full model. The importance of the variable `opinion_h1n1_risk` has increased, while the importance of the variable `opinion_h1n1_vacc_effective` has reduced to zero, which indicates the respondent's opinion about H1N1 vaccine effectiveness is may not be important to predict a person's likelihood of receiving the H1N1 vaccine.                                                                                                              
+The variable importance ranking in the reduced model remains the same as the full model. However, the importance of the
+`opinion_h1n1_risk` variable has increased, while the importance of `opinion_h1n1_vacc_effective` has reduced to zero. This suggests that a respondent's opinion on the
+effectiveness of the H1N1 vaccine may not be a crucial factor in predicting their likelihood of receiving it.                              
+
 
 ## Evaluate the performance of model on the testing set
 
 ```{r}
+set.seed(123)
+
 pred.rf.test = predict(rf_h1n1, h1n1_select_test)
 
 test.outcome = h1n1_select_test$h1n1_vaccine
@@ -218,7 +230,11 @@ test.outcome = h1n1_select_test$h1n1_vaccine
 confusionMatrix(pred.rf.test, test.outcome, positive = '1')
 ```
 
-After applying the model to the reduced test set, the accuracy increased to 75.62%. The model also showed a balanced sensitivity (0.73) and specificity (0.76).
+In the reduced dataset, the ***random forests*** model achieves an accuracy of 75.62%, which is roughly 4% lower than the *Elastic Net* model's accuracy on the full
+dataset. This decrease in accuracy is expected as we reduced the number of predictors. Despite removing almost 90% of the features, the model's accuracy did not decrease
+significantly. This suggests that the selected features are crucial predictors for the model.
+
+Besides, the model also showed a quite balanced sensitivity (0.73) and specificity (0.76).
 
 
 # Seasonal Flu vaccines
@@ -290,6 +306,16 @@ Based on the model coefficients and variable importance, we decided to select va
 7. `health_insurance` - Whether respondent has health insurance.
 
 
+##### Examine full model accuracy
+
+```{r}
+confusionMatrix(seasonal_model)
+```
+
+The model's average accuracy on the full dataset that includes all variables is 78.32%. Specifically, 35% of the data was correctly classified as having received seasonal flu
+vaccines, while 12% of the data classified as not having received the vaccine actually had received it. Additionally, 10% of the data that were classified as having received the vaccine had never actually received it. On the other hand, 43.5% of the data were correctly classified as not having received the H1N1 vaccine.
+
+
 ### Select only relevant variables for seasonal flu training and testing dataset
 
 ```{r}
@@ -323,18 +349,22 @@ rf_seasonal = train(
 rf_seasonal$bestTune
 ```
 
-Examine model accuracy and variable importance.
+Examine variable importance.
 ```{r}
-confusionMatrix(rf_seasonal)
-
 varImp(rf_seasonal)
 ```
 
-The ***random forests*** model gives an average accuracy of 77.39%. The rank of variable importance for the reduced model is quite similar the full model. The importance of the variable `opinion_seas_vacc_effective` has increased, while the importance of the variables `doctor_recc_seasonal` has decreased a little bit. People in the age group of 65+ years are more likely to receive a seasonal flu vaccines compared to other age groups. The importance of all other variables that were selected has dropped to below 20%, which indicates maybe they are not important variables that influence people's probability of receiving seasonal flu vaccines.                                                                                                            
+The variable importance ranking for the reduced model is very similar to that of the full model. The `opinion_seas_vacc_effective` variable's importance has increased, while the
+`doctor_recc_seasonal` variable's importance has decreased slightly. Individuals aged 65 years or older are more likely to receive seasonal flu vaccines than those in other age
+groups. Furthermore, the importance of all other selected variables has dropped below 20%, suggesting that they may not significantly influence a person's likelihood of receiving
+seasonal flu vaccines.
+
 
 ## Evaluate the performance of model on the testing set
 
 ```{r}
+set.seed(123)
+
 pred.rf.seasonal = predict(rf_seasonal, seasonal_select_test)
 
 test.outcome.seasonal = seasonal_select_test$seasonal_vaccine
@@ -342,11 +372,39 @@ test.outcome.seasonal = seasonal_select_test$seasonal_vaccine
 confusionMatrix(pred.rf.seasonal, test.outcome.seasonal, positive = '1')
 ```
 
-After applying the model to the reduced test set, the accuracy of the model remained about the same (77.24%). The model also showed a balanced sensitivity (0.74) and specificity
-(0.80).
+In the reduced dataset, the ***random forests*** model achieves an accuracy of 77.21%, which is only 1% lower than the *Elastic Net* model's accuracy on the full dataset. This
+decrease in accuracy is expected as we reduced the number of predictors. Despite removing 77% of the features, the model's accuracy did not decrease significantly. This suggests that the selected features are crucial predictors for the model.
+
+Besides, the model also showed a quite balanced sensitivity (0.74) and specificity (0.80).
 
 
-## Analytic Limitation
+# Conclusion
 
+### HIV vaccines 
+
+Through a data-driven approach, we have successfully identified that a doctor's recommendation and an individual's perception of contracting H1N1 flu without a vaccine can
+significantly increase the likelihood of receiving the H1N1 vaccine.
+
+### Seasonal Flu vaccines
+
+Using a data-driven approach, we have successfully identified that a doctor's recommendation, an individual's perception of contracting seasonal flu without a vaccine, and their
+belief in the vaccine's high efficacy are key factors that can significantly increase the likelihood of receiving the seasonal flu vaccine. Additionally, the data indicates that
+individuals in the older age group are more likely to receive seasonal flu vaccines.
+
+
+## Analytic Limitations
+
+1) Missing data
+   + In the present study, it has been observed that three features of the dataset under consideration exhibit a high degree of missingness. While it may be tempting to remove these features from the analysis altogether, it must be noted that such an action may result in introducing bias to the study. The nature of the missing data remains unknown, and it is possible that the missingness is either missing at random (MAR) or not missing at random (NMAR). If indeed the data is MAR or NMAR, removing variables with missing values could potentially bias the results of the analysis.
+
+2) Imputation can introduce bias
+   + Imputation, as a technique for handling missing data, carries with it the potential to introduce bias into the results of an analysis if the imputed values do not accurately reflect the true values of the missing data. This risk is particularly salient when the missingness is non-random or associated with unobserved variables. In such cases, imputation may not be able to fully account for the underlying mechanisms driving the missingness, leading to biased results.
 
 ## Ethical Consideration
+
+The potential impact of an incorrect output produced by a machine learning model is a significant concern in many research contexts. In the present study, it was noted that the dataset under consideration includes three features with a large number of missing values, and it is unclear whether the missingness is completely at random. The use of imputation methods to handle these missing values raises the possibility that bias may have been introduced into the analysis, which could lead to inaccurate results.
+
+To address this concern, further investigation is required to verify the accuracy of the results obtained using machine learning approaches. Specifically, it may be necessary to incorporate epidemiological knowledge and expertise to supplement the findings obtained from machine learning analyses. By doing so, it may be possible to obtain a more accurate and comprehensive understanding of the relationships between variables and outcomes under consideration.
+
+Overall, it is important to recognize the limitations and potential biases of machine learning methods, particularly when dealing with datasets that include missing values or other sources of potential bias. By taking a cautious and critical approach to the use of machine learning in research, it is possible to obtain more accurate and reliable results that can inform effective decision-making and policy development.
+

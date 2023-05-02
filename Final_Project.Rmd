@@ -4,7 +4,7 @@ author: "Chee Kay Cheong"
 output: github_document
 ---
 
-## Load needed packages
+### Load needed packages
 ```{r setup, message = FALSE, warning = FALSE}
 knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 
@@ -100,49 +100,161 @@ missing_plot(flu_nomiss)
 Based on the plot above, there is no more missing values in the new dataset `flu_nomiss`.
 Next, we will perform *Elastic Net* to reduce the dimension of the dataset by removing features that are not as important and significant for seasonal and H1N1 vaccines.
 
-# Data Partitioning
 
-We will partition the data into a 70/30 split separately for the two different dependent variables: `h1n1_vaccine` and `seasonal_vaccine`.
+# H1N1 vaccines
 
-##### H1N1 Vaccines
+## Data Partitioning
 
-To understand what variables are responsible for influencing people's probability of receiving the H1N1 vaccines, we will remove the variable `seasonal_vaccine` from this dataset 
+To understand what variables are responsible for influencing people's probability of receiving the H1N1 vaccines, any variables of seasonal flu will be excluded from this dataset 
 before partitioning.
 ```{r}
 set.seed(123)
 
 h1n1 = flu_nomiss %>% 
-  select(-seasonal_vaccine)
+  select(-seasonal_vaccine, -opinion_seas_vacc_effective, -opinion_seas_risk, -opinion_seas_sick_from_vacc, -doctor_recc_seasonal)
 
 h1n1.train.index = createDataPartition(y = h1n1$h1n1_vaccine, p = 0.7, list = FALSE)
 h1n1.train.data = h1n1[h1n1.train.index, ]
 h1n1.test.data = h1n1[-h1n1.train.index, ]
 ```
 
-##### Seasonal Flu vaccines
+Examine the number of outcome in the training dataset and determine if we should do "up" or "down" sampling.
+```{r}
+h1n1.train.data %>% 
+  select(h1n1_vaccine) %>% 
+  group_by(h1n1_vaccine) %>% 
+  count() %>% 
+  knitr::kable()
+```
 
-To understand what variables are responsible for influencing people's probability of receiving the seasonal flu vaccines, we will remove the variable `h1n1_vaccine` from this
-dataset before partitioning.
+We should consider upsampling the observations that received the H1N1 vaccine as there are much fewer of them. However, due to the availability of enough observations to conduct
+cross-validation and for the sake of easier computation, we will opt for downsampling instead.
+
+## Feature Selection using Elastic Net
+
+The dataset includes 33 independent variables. To address our research question, it is necessary to conduct dimension reduction and select the most relevant features that have the
+greatest impact on our outcome variable.
+
+Fit model into H1N1 training set.
+```{r}
+set.seed(123)
+
+# Create vectors of lambda and alpha
+lambda = 10^seq(-3, 3, length = 100)
+alpha = 0.1*seq(1, 10, length = 10)
+tune_grid = expand.grid(alpha = alpha, lambda = lambda)
+
+# Set validation method and options
+control.settings = trainControl(method = "cv", number = 10, sampling = "down")
+
+# Fit model 
+h1n1_model = train(h1n1_vaccine ~ ., data = h1n1.train.data, method = "glmnet", trControl = control.settings, preProcess = c("center", "scale"), tuneGrid = tune_grid)
+
+# Output best values of alpha & lambda
+h1n1_model$bestTune
+```
+
+##### Examine model coefficients and variable importance.
+```{r}
+coef(h1n1_model$finalModel, h1n1_model$bestTune$lambda)
+
+varImp(h1n1_model)
+```
+
+Based on the model coefficients and variable importance, we identified three variables that are important for people to receive the H1N1 vaccines:                                 
+1. `doctor_recc_h1n1` - whether the H1N1 flu vaccine was recommended by doctor.                                                                                                     
+2. `opinion_h1n1_risk` - Respondent's opinion about risk of getting sick with H1N1 flu without vaccine.                                                                             
+3. `opinion_h1n1_vacc_effective` - Respondent's opinion about H1N1 vaccine effectiveness.
+
+
+### Select only relevant variables for H1N1 training and testing dataset
+
+```{r}
+# Training set
+h1n1_select_train = 
+  h1n1.train.data %>% 
+  select(doctor_recc_h1n1, opinion_h1n1_risk, opinion_h1n1_vacc_effective, h1n1_vaccine)
+
+# Testing set
+h1n1_select_test = 
+  h1n1.test.data %>% 
+  select(doctor_recc_h1n1, opinion_h1n1_risk, opinion_h1n1_vacc_effective, h1n1_vaccine)
+```
+
+
+## Use Random Forests to test variable importance
+
+Once we have selected the features using *elastic net*, we can use *random forests* to test the importance of these selected features. We can fit a random forest model using only the selected features and compare the resulting variable importance measures to those obtained from the full model that includes all available features. If the selected features are indeed important predictors of the outcome, we should see a similar or higher importance score for these features in the reduced model compared to the full model. If the selected features are not important, we would expect their importance scores to be lower in the reduced model.
+
+Fit model into the reduced training set.
+```{r}
+set.seed(123)
+
+# Try different values of mtry 
+mtry.vals.h1n1 = c(ncol(h1n1_select_train)-1, sqrt(ncol(h1n1_select_train)-1), 0.5*ncol(h1n1_select_train)-1)
+mtry.grid.h1n1 = expand.grid(.mtry = round(mtry.vals.h1n1))
+
+rf_h1n1 = train(h1n1_vaccine ~ ., data = h1n1_select_train, method = "rf", metric = "Accuracy", tuneGrid = mtry.grid.h1n1, trControl = control.settings, ntree = 100)
+
+rf_h1n1$bestTune
+```
+
+Examine model accuracy and variable importance.
+```{r}
+confusionMatrix(rf_h1n1)
+
+varImp(rf_h1n1)
+```
+
+The ***random forests*** model gives an average accuracy of 74.68%. The rank of variable importance for the reduced model is the same as the full model. The importance of the variable `opinion_h1n1_risk` has increased, while the importance of the variable `opinion_h1n1_vacc_effective` has reduced to zero, which indicates the respondent's opinion about H1N1 vaccine effectiveness is may not be important to predict a person's likelihood of receiving the H1N1 vaccine.                                                                                                              
+
+## Evaluate the performance of model on the testing set
+
+```{r}
+pred.rf.test = predict(rf_h1n1, h1n1_select_test)
+
+test.outcome = h1n1_select_test$h1n1_vaccine
+
+confusionMatrix(pred.rf.test, test.outcome, positive = '1')
+```
+
+After applying the model to the reduced test set, the accuracy increased to 75.62%. The model also showed a balanced sensitivity (0.73) and specificity (0.76).
+
+
+# Seasonal Flu vaccines
+
+## Data Partitioning
+
+To understand what variables are responsible for influencing people's probability of receiving the seasonal flu vaccines, any variables of H1N1 will be excluded from this dataset
+before partitioning.
 ```{r}
 set.seed(123)
 
 seasonal = flu_nomiss %>% 
-  select(-h1n1_vaccine)
+  select(-h1n1_vaccine, -opinion_h1n1_vacc_effective, -opinion_h1n1_risk, -opinion_h1n1_sick_from_vacc, -doctor_recc_h1n1)
 
 seasonal.train.index = createDataPartition(y = seasonal$seasonal_vaccine, p = 0.7, list = FALSE)
 seasonal.train.data = seasonal[seasonal.train.index, ]
 seasonal.test.data = seasonal[-seasonal.train.index, ]
 ```
 
+Examine the number of outcome in the training dataset and determine if we should do "up" or "down" sampling.
+```{r}
+seasonal.train.data %>% 
+  select(seasonal_vaccine) %>% 
+  group_by(seasonal_vaccine) %>% 
+  count() %>% 
+  knitr::kable()
+```
 
-# Feature Selection using Elastic Net
+The outcome is quite balance, so we might not need any up- or downsampling.
 
-The dataset includes 35 independent variables. To address our research question, it is necessary to conduct dimension reduction and select the most relevant features that have the
+## Feature Selection using Elastic Net
+
+The dataset includes 33 independent variables. To address our research question, it is necessary to conduct dimension reduction and select the most relevant features that have the
 greatest impact on our outcome variable.
 
-#### H1N1 vaccines
-
-Fit model into H1N1 training set.
+Fit model into seasonal flu training set.
 ```{r}
 set.seed(123)
 
@@ -155,36 +267,86 @@ tune_grid = expand.grid(alpha = alpha, lambda = lambda)
 control.settings = trainControl(method = "cv", number = 10)
 
 # Fit model 
-h1n1_model = train(h1n1_vaccine ~ ., data = h1n1.train.data, method = "glmnet", trControl = control.settings, preProcess = c("center", "scale"), tuneGrid = tune_grid)
+seasonal_model = train(seasonal_vaccine ~ ., data = seasonal.train.data, method = "glmnet", trControl = control.settings, preProcess = c("center", "scale"), tuneGrid = tune_grid)
 
 # Output best values of alpha & lambda
-h1n1_model$bestTune
+seasonal_model$bestTune
 ```
 
-Examine model coefficients.
+##### Examine model coefficients and variable importance.
 ```{r}
-coef(h1n1_model$finalModel, h1n1_model$bestTune$lambda)
+coef(seasonal_model$finalModel, seasonal_model$bestTune$lambda)
+
+varImp(seasonal_model)
 ```
 
-We will remove variables that have an average coefficient values that are smaller than |0.05| as they are not as important for predicting the probability of receiving H1N1 vaccines. 
-
-Based on the model coefficients, we would remove `behavioral_avoidance`, `behavioral_face_mask`, `behavioral_wash_hands`, `behavioral_outside_home`, `behavioral_touch_face`,
-`chronic_med_condition`, `opinion_h1n1_sick_from_vacc`, `income_poverty`, `rent_or_own`, `employment_status`, `hhs_geo_region`, `census_msa`, `household_adults`,
-`household_children`, `employment_industry`, and `employment_occupation`.
-
-
-
-
-
+Based on the model coefficients and variable importance, we decided to select variables that have an overall importance of 20% or higher:                                          
+1. `opinion_seas_risk` - Respondent's opinion about risk of getting sick with seasonal flu without vaccine.                                                                         
+2. `opinion_seas_vacc_effective` - Respondent's opinion about seasonal flu vaccine effectiveness.                                                                                   
+3. `doctor_recc_seasonal` - Whether seasonal flu vaccine was recommended by doctor.                                                                                                 
+4. `age_group` - Age group of respondent.                                                                                                                                           
+5. `opinion_seas_sick_from_vacc` - Respondent's worry of getting sick from taking seasonal flu vaccine.                                                                             
+6. `health_worker` - Whether respondent is a healthcare worker.                                                                                                                     
+7. `health_insurance` - Whether respondent has health insurance.
 
 
-Apply final model in the test set.
+### Select only relevant variables for seasonal flu training and testing dataset
+
 ```{r}
-h1n1_test_outcome = predict(h1n1_model, h1n1.test.data)
+# Training set
+seasonal_select_train = 
+  seasonal.train.data %>% 
+  select(opinion_seas_risk, opinion_seas_vacc_effective, doctor_recc_seasonal, age_group, opinion_seas_sick_from_vacc, health_worker, health_insurance, seasonal_vaccine)
 
-confusionMatrix(h1n1_test_outcome, h1n1.test.data$h1n1_vaccine, positive = "1")
+# Testing set
+seasonal_select_test = 
+  seasonal.test.data %>% 
+  select(opinion_seas_risk, opinion_seas_vacc_effective, doctor_recc_seasonal, age_group, opinion_seas_sick_from_vacc, health_worker, health_insurance, seasonal_vaccine)
 ```
 
 
+## Use Random Forests to test variable importance
+
+Once we have selected the features using *elastic net*, we can use *random forests* to test the importance of these selected features. We can fit a random forest model using only the selected features and compare the resulting variable importance measures to those obtained from the full model that includes all available features. If the selected features are indeed important predictors of the outcome, we should see a similar or higher importance score for these features in the reduced model compared to the full model. If the selected features are not important, we would expect their importance scores to be lower in the reduced model.
+
+Fit model into the reduced training set.
+```{r}
+set.seed(123)
+
+# Try different values of mtry 
+mtry.vals.seasonal = c(ncol(seasonal_select_train)-1, sqrt(ncol(seasonal_select_train)-1), 0.5*ncol(seasonal_select_train)-1)
+mtry.grid.seasonal = expand.grid(.mtry = round(mtry.vals.seasonal))
+
+rf_seasonal = train(
+  seasonal_vaccine ~ ., data = seasonal_select_train, method = "rf", metric = "Accuracy", tuneGrid = mtry.grid.seasonal, trControl = control.settings, ntree = 100)
+
+rf_seasonal$bestTune
+```
+
+Examine model accuracy and variable importance.
+```{r}
+confusionMatrix(rf_seasonal)
+
+varImp(rf_seasonal)
+```
+
+The ***random forests*** model gives an average accuracy of 77.39%. The rank of variable importance for the reduced model is quite similar the full model. The importance of the variable `opinion_seas_vacc_effective` has increased, while the importance of the variables `doctor_recc_seasonal` has decreased a little bit. People in the age group of 65+ years are more likely to receive a seasonal flu vaccines compared to other age groups. The importance of all other variables that were selected has dropped to below 20%, which indicates maybe they are not important variables that influence people's probability of receiving seasonal flu vaccines.                                                                                                            
+
+## Evaluate the performance of model on the testing set
+
+```{r}
+pred.rf.seasonal = predict(rf_seasonal, seasonal_select_test)
+
+test.outcome.seasonal = seasonal_select_test$seasonal_vaccine
+
+confusionMatrix(pred.rf.seasonal, test.outcome.seasonal, positive = '1')
+```
+
+After applying the model to the reduced test set, the accuracy of the model remained about the same (77.24%). The model also showed a balanced sensitivity (0.74) and specificity
+(0.80).
 
 
+## Analytic Limitation
+
+
+## Ethical Consideration

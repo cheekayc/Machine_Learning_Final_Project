@@ -1,7 +1,7 @@
 ---
 title: "Final Project"
 author: "Chee Kay Cheong"
-output: github_document
+output: html_document
 ---
 
 ### Load needed packages
@@ -14,7 +14,6 @@ library(mice)
 library(caret)
 library(glmnet)
 library(randomForest)
-library(pROC)
 ```
 
 # Introduction
